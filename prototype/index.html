@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenWipes — SF bathrooms, rated by people who've been</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --paper: #F2ECDF;
+    --ink: #17150F;
+    --ink-soft: #4A4536;
+    --gray: #8C8678;
+    --green: #1F9E5A;
+    --amber: #E08A1E;
+    --red: #C1121F;
+    --blue: #2F5BD0;
+    --shadow: 5px 5px 0 var(--ink);
+    --shadow-sm: 4px 4px 0 var(--ink);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    overflow: hidden;
+  }
+
+  #map { position: fixed; inset: 0; background: var(--paper); }
+  /* warm the CARTO voyager tiles toward paper */
+  .leaflet-tile-pane { filter: sepia(0.22) saturate(0.92) brightness(1.02); }
+
+  /* ---------- shared chrome ---------- */
+  .card {
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+  }
+  .pill {
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 999px;
+    box-shadow: var(--shadow-sm);
+    font-family: "Hanken Grotesk", sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    color: var(--ink);
+    cursor: pointer;
+    user-select: none;
+  }
+  .pill:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--ink); }
+  .pill.dark { background: var(--ink); color: var(--paper); }
+
+  /* ---------- top chrome ---------- */
+  .topbar {
+    position: fixed; top: 16px; left: 16px; right: 16px;
+    display: flex; align-items: stretch; gap: 12px;
+    z-index: 1000; pointer-events: none;
+  }
+  .topbar > * { pointer-events: auto; }
+  .logo-badge {
+    width: 58px; height: 58px; flex: none;
+    background: #cfd2d6;
+    border: 3px solid var(--ink);
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    display: grid; place-items: center;
+    font-family: "Anton", sans-serif;
+    font-size: 26px;
+    color: var(--red);
+    text-shadow: 1.5px 1.5px 0 var(--ink);
+  }
+  .searchbar {
+    flex: 1; max-width: 540px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 15px;
+    box-shadow: var(--shadow-sm);
+    padding: 0 16px;
+  }
+  .searchbar input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font: 600 16px "Hanken Grotesk", sans-serif; color: var(--ink);
+  }
+  .searchbar input::placeholder { color: var(--gray); }
+  .spacer { flex: 1; pointer-events: none; }
+  .layers-btn { padding: 0 20px; font-size: 14px; display: grid; place-items: center; }
+
+  /* ---------- chips ---------- */
+  .chips {
+    position: fixed; top: 88px; left: 16px; right: 16px;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    z-index: 1000; pointer-events: none;
+  }
+  .chips > * { pointer-events: auto; }
+  .chip { padding: 9px 15px; font-size: 12.5px; }
+  .chip.badge {
+    font-family: "Anton", sans-serif;
+    font-weight: 400; letter-spacing: 1px;
+    background: var(--ink); color: var(--paper);
+    display: flex; align-items: center; gap: 7px;
+    cursor: default;
+  }
+  .chip.badge:active { transform: none; box-shadow: var(--shadow-sm); }
+  .chip[data-on="1"] { background: var(--ink); color: var(--paper); }
+
+  /* ---------- legend ---------- */
+  .legend {
+    position: fixed; left: 16px; bottom: 22px;
+    padding: 13px 17px; z-index: 1000;
+    display: grid; gap: 8px;
+  }
+  .legend .row { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
+  .legend .row small { font-weight: 500; color: var(--ink-soft); }
+  .swatch {
+    width: 34px; height: 11px; border-radius: 999px;
+    border: 2px solid var(--ink); flex: none;
+  }
+
+  /* ---------- welcome ---------- */
+  .welcome {
+    position: fixed; left: 50%; top: 50%;
+    transform: translate(-50%,-50%);
+    width: min(500px, calc(100vw - 36px));
+    padding: 26px 28px; z-index: 2000;
+    border-radius: 20px;
+  }
+  .welcome .logo-badge { width: 72px; height: 72px; font-size: 34px; border-radius: 17px; margin-bottom: 14px; }
+  .welcome h1 {
+    margin: 0 0 4px;
+    font: 600 21px/1.5 "Hanken Grotesk", sans-serif;
+    text-wrap: balance;
+  }
+  .welcome h1 b { font-weight: 800; }
+  .welcome .legend-rows { margin: 16px 0 20px; display: grid; gap: 9px; }
+  .welcome .legend-rows .row { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 600; }
+  .welcome .swatch { width: 46px; height: 14px; }
+  .btn { display: block; width: 100%; cursor: pointer; border-radius: 999px; box-shadow: var(--shadow-sm); font-family: "Hanken Grotesk", sans-serif; }
+  .btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--ink); }
+  .btn.primary { background: var(--ink); color: var(--paper); border: 2.5px solid var(--ink); font-weight: 800; font-size: 17px; padding: 14px 0; margin-bottom: 11px; }
+  .btn.secondary { background: var(--paper); color: var(--ink); border: 2.5px solid var(--ink); font-weight: 700; font-size: 15px; padding: 12px 0; }
+  .fineprint { margin: 15px 0 0; text-align: center; font-size: 13px; font-weight: 500; color: var(--ink-soft); }
+  .fineprint u { text-underline-offset: 3px; }
+  .hidden { display: none; }
+
+  /* ---------- leaflet restyle ---------- */
+  .leaflet-control-zoom.leaflet-bar {
+    border: 2.5px solid var(--ink); border-radius: 15px;
+    box-shadow: var(--shadow-sm); overflow: hidden;
+  }
+  .leaflet-touch .leaflet-bar a {
+    width: 46px; height: 42px; line-height: 42px;
+    background: var(--paper); color: var(--ink);
+    font: 800 22px "Hanken Grotesk", sans-serif;
+    border-bottom-color: var(--ink);
+  }
+  .leaflet-touch .leaflet-bar a:first-child { border-bottom: 2.5px solid var(--ink); }
+  .leaflet-container { font-family: "Hanken Grotesk", sans-serif; }
+
+  /* pins */
+  .ow-pin {
+    width: 36px; height: 36px;
+    border: 2.5px solid var(--ink);
+    border-radius: 11px;
+    box-shadow: 3px 3px 0 var(--ink);
+    display: grid; place-items: center;
+    font-size: 18px;
+    background: var(--gray);
+  }
+  .ow-pin.good { background: var(--green); }
+  .ow-pin.mid { background: var(--amber); }
+  .ow-pin.bad { background: var(--red); }
+
+  /* popup card */
+  .leaflet-popup-content-wrapper {
+    background: var(--paper);
+    border: 2.5px solid var(--ink);
+    border-radius: 15px;
+    box-shadow: var(--shadow-sm);
+    color: var(--ink);
+  }
+  .leaflet-popup-tip { background: var(--ink); }
+  .leaflet-popup-content { margin: 14px 16px; font: 500 14px/1.45 "Hanken Grotesk", sans-serif; }
+  .pop-name { font-weight: 800; font-size: 16px; margin-bottom: 2px; }
+  .pop-type { color: var(--ink-soft); font-size: 12.5px; margin-bottom: 6px; }
+  .pop-score { font-weight: 700; margin-bottom: 6px; }
+  .pop-score .stars { letter-spacing: 1px; }
+  .pop-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+  .pop-tags span {
+    border: 1.5px solid var(--ink); border-radius: 999px;
+    font-size: 11px; font-weight: 700; padding: 1px 8px;
+  }
+  .pop-actions { display: flex; gap: 8px; }
+  .pop-actions button {
+    flex: 1; cursor: pointer; border-radius: 999px;
+    font: 800 13px "Hanken Grotesk", sans-serif;
+    padding: 8px 0; border: 2px solid var(--ink);
+    box-shadow: 2.5px 2.5px 0 var(--ink);
+  }
+  .pop-actions .rate { background: var(--ink); color: var(--paper); }
+  .pop-actions .maps { background: var(--paper); color: var(--ink); }
+  .pop-actions button:active { transform: translate(2px,2px); box-shadow: 0.5px 0.5px 0 var(--ink); }
+  .pop-photo {
+    height: 74px; border: 2px dashed var(--gray); border-radius: 11px;
+    display: grid; place-items: center;
+    color: var(--gray); font-weight: 600; font-size: 12px;
+    margin-bottom: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="topbar">
+  <div class="logo-badge">W</div>
+  <div class="searchbar">🔍 <input placeholder="Search a spot, street, or neighborhood…"></div>
+  <div class="spacer"></div>
+  <button class="pill layers-btn">🏷️&nbsp; FILTERS</button>
+</div>
+
+<div class="chips">
+  <span class="chip pill badge" id="clock">OPENWIPES · SF</span>
+  <button class="chip pill" data-tag="all" data-on="1">ALL</button>
+  <button class="chip pill" data-tag="Free">FREE</button>
+  <button class="chip pill" data-tag="Wheelchair accessible">ACCESSIBLE</button>
+  <button class="chip pill" data-tag="Gender-neutral">GENDER-NEUTRAL</button>
+  <button class="chip pill" data-tag="No code">NO CODE</button>
+  <button class="chip pill" data-tag="Baby changing">BABY CHANGING</button>
+</div>
+
+<div class="legend card">
+  <div class="row"><span class="swatch" style="background:var(--green)"></span> Sparkling <small>· 4★ and up</small></div>
+  <div class="row"><span class="swatch" style="background:var(--amber)"></span> Decent <small>· 2.5 to 4★</small></div>
+  <div class="row"><span class="swatch" style="background:var(--red)"></span> Dicey <small>· under 2.5★</small></div>
+</div>
+
+<div class="welcome card" id="welcome">
+  <div class="logo-badge">W</div>
+  <h1>Every public bathroom in SF, <b>rated by people who've actually been</b>. Tap a pin for the verdict, the tags, <b>and whether you'll need a code</b>.</h1>
+  <div class="legend-rows">
+    <div class="row"><span class="swatch" style="background:var(--green)"></span> sparkling</div>
+    <div class="row"><span class="swatch" style="background:var(--amber)"></span> decent</div>
+    <div class="row"><span class="swatch" style="background:var(--red)"></span> dicey</div>
+  </div>
+  <button class="btn primary" id="show-map">Show me the map</button>
+  <button class="btn secondary">How it works →</button>
+  <p class="fineprint">Free, no account. Seeded from <u>SF's open data</u>, grown by everyone who's ever really had to go.</p>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const SPOTS = [
+  { name: "Dolores Park Restroom", type: "Public / city facility", lat: 37.7598, lng: -122.4271, score: 4.1, reviews: 38, tags: ["Free", "Gender-neutral"] },
+  { name: "Ferry Building", type: "Public / city facility", lat: 37.7955, lng: -122.3937, score: 4.5, reviews: 61, tags: ["Free", "Wheelchair accessible", "Baby changing", "No code"] },
+  { name: "SF Main Library", type: "Public / city facility", lat: 37.7787, lng: -122.4157, score: 3.4, reviews: 22, tags: ["Free", "Wheelchair accessible", "No code"] },
+  { name: "Blue Bottle Mint Plaza", type: "Cafe / coffee shop", lat: 37.7827, lng: -122.4090, score: 3.8, reviews: 14, tags: ["Requires purchase", "Code required"] },
+  { name: "Westfield Level 4", type: "Retail / store", lat: 37.7841, lng: -122.4076, score: 2.2, reviews: 29, tags: ["Free", "Wheelchair accessible"] },
+  { name: "Alamo Square Restroom", type: "Public / city facility", lat: 37.7767, lng: -122.4345, score: 2.9, reviews: 12, tags: ["Free"] },
+  { name: "Zeitgeist", type: "Bar", lat: 37.7702, lng: -122.4223, score: 1.9, reviews: 17, tags: ["Requires purchase"] },
+  { name: "Salesforce Park", type: "Public / city facility", lat: 37.7897, lng: -122.3963, score: 4.6, reviews: 44, tags: ["Free", "Wheelchair accessible", "Gender-neutral", "Baby changing", "No code"] },
+  { name: "Crissy Field East Beach", type: "Public / city facility", lat: 37.8039, lng: -122.4519, score: 3.1, reviews: 9, tags: ["Free", "No code"] },
+  { name: "Pit Stop — 16th & Mission", type: "Public / city facility", lat: 37.7648, lng: -122.4194, score: 2.4, reviews: 26, tags: ["Free", "No code"] },
+];
+
+const map = L.map("map", { zoomControl: true }).setView([37.7793, -122.4193], 13);
+map.zoomControl.setPosition("bottomright");
+
+L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+const band = s => (s >= 4 ? "good" : s >= 2.5 ? "mid" : "bad");
+const stars = s => "★".repeat(Math.round(s)) + "☆".repeat(5 - Math.round(s));
+
+const markers = [];
+for (const spot of SPOTS) {
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="ow-pin ${band(spot.score)}">🚽</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -22],
+  });
+  const m = L.marker([spot.lat, spot.lng], { icon }).addTo(map);
+  m.bindPopup(`
+    <div class="pop-name">${spot.name}</div>
+    <div class="pop-type">${spot.type}</div>
+    <div class="pop-score"><span class="stars">${stars(spot.score)}</span> ${spot.score.toFixed(1)} · ${spot.reviews} reviews</div>
+    <div class="pop-tags">${spot.tags.map(t => `<span>${t}</span>`).join("")}</div>
+    <div class="pop-photo">📷 add the first photo</div>
+    <div class="pop-actions">
+      <button class="rate">Rate it</button>
+      <button class="maps">Open in Maps</button>
+    </div>
+  `, { minWidth: 230 });
+  m._ow = spot;
+  markers.push(m);
+}
+
+// tag chip filtering
+document.querySelectorAll(".chip[data-tag]").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll(".chip[data-tag]").forEach(c => c.dataset.on = "0");
+    chip.dataset.on = "1";
+    const tag = chip.dataset.tag;
+    for (const m of markers) {
+      const show = tag === "all" || m._ow.tags.includes(tag);
+      if (show && !map.hasLayer(m)) m.addTo(map);
+      if (!show && map.hasLayer(m)) m.remove();
+    }
+  });
+});
+
+document.getElementById("show-map").addEventListener("click", () => {
+  document.getElementById("welcome").classList.add("hidden");
+});
+</script>
+</body>
+</html>

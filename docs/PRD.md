@@ -82,7 +82,8 @@ Structured checkboxes on both bathrooms and the add/review forms: Free, Gender-n
 ## Architecture
 
 - **Frontend**: Next.js (App Router), bun for tooling, deployed on Vercel.
-- **Map**: MapLibre GL JS with Protomaps PMTiles, custom style matching the visual theme (cream ground, tan blocks, yellow arterials, black-outlined chrome).
+- **Map**: Leaflet with CARTO Voyager raster tiles warmed toward the paper palette by a CSS filter (the same stack curb.guide uses).
+  Free CARTO tiles carry an "API key required" watermark; before launch either register a free CARTO key or switch the tile source to Protomaps.
 - **Database**: Postgres on Neon. Tables: `bathrooms`, `tags`, `bathroom_tags`, `reviews`, `photos`.
 - **Photos**: Vercel Blob, URL stored on the photo row.
 - **Seed**: one-off import script for the DataSF public restroom dataset, tagged `seed_datasf`.
@@ -90,14 +91,15 @@ Structured checkboxes on both bathrooms and the add/review forms: Free, Gender-n
 
 ## Visual design
 
-Theme is the curb.guide look, adapted:
+Theme uses curb.guide's exact design tokens, captured from the live site:
 
-- Cream basemap (#f2ede1), warm tan blocks, yellow arterials, muted park green.
-- Floating UI chrome: 2.5px black borders, large radii, hard offset shadows, pill buttons, cream panels (#efe9db).
-- Type: Archivo (500 to 900 weights) everywhere, Archivo Black for the logo badge.
-- Accent semantics: green/amber/red are score bands only; red logo badge is the one brand accent.
-- Pins: rounded-square toilet-glyph markers colored by score band.
-- Mockup lives at the OpenWipes artifact (already reviewed under the earlier working title); logo badge glyph and wordmark update to the new name.
+- Paper #F2ECDF, ink #17150F, soft ink #4A4536, gray #8C8678.
+- Score bands: green #1F9E5A, amber #E08A1E, red #C1121F; blue #2F5BD0 reserved for the "you are here" dot.
+- Chrome: 2.5px ink borders, 15px radii, hard offset shadow `5px 5px 0` ink, pill buttons, paper panels.
+- Type: Hanken Grotesk (400 to 800) for UI and body, Anton for the logo badge and condensed label chips.
+- Accent semantics: green/amber/red are score bands only; the red logo badge is the one brand accent.
+- Pins: rounded-square toilet-glyph markers colored by score band, gray for unrated.
+- Working prototype lives at `prototype/index.html` (Leaflet, sample data, live filtering); the static artifact mockup preceded it and is superseded.
 
 ## Success measures
 
