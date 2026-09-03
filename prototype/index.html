@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OpenWipes</title>
+<meta name="description" content="Every public bathroom in San Francisco, rated by people who've actually been.">
+<meta property="og:title" content="OpenWipes">
+<meta property="og:description" content="Every public bathroom in San Francisco, rated by people who've actually been.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://openwipes.vercel.app">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚽</text></svg>">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
@@ -31,6 +37,7 @@
   #map { position: fixed; inset: 0; background: var(--paper); }
   /* shift the CARTO voyager tiles toward the lavender paper */
   .leaflet-tile-pane { filter: sepia(0.4) hue-rotate(205deg) saturate(1.5) brightness(1.02); }
+  body.adding #map { cursor: crosshair; }
 
   /* ---------- shared chrome ---------- */
   .card {
@@ -53,6 +60,7 @@
   }
   .pill:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 var(--ink); }
   .pill.dark { background: var(--ink); color: var(--paper); }
+  .pill.accent { background: var(--blue); color: var(--paper); }
 
   /* ---------- top chrome ---------- */
   .topbar {
@@ -85,10 +93,11 @@
   .searchbar input {
     flex: 1; border: none; outline: none; background: transparent;
     font: 600 16px "Hanken Grotesk", sans-serif; color: var(--ink);
+    min-width: 0;
   }
   .searchbar input::placeholder { color: var(--gray); }
   .spacer { flex: 1; pointer-events: none; }
-  .layers-btn { padding: 0 20px; font-size: 14px; display: grid; place-items: center; }
+  .layers-btn { padding: 0 20px; font-size: 14px; display: grid; place-items: center; white-space: nowrap; }
 
   /* ---------- chips ---------- */
   .chips {
@@ -126,6 +135,8 @@
     position: fixed; left: 50%; top: 50%;
     transform: translate(-50%,-50%);
     width: min(500px, calc(100vw - 36px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
     padding: 26px 28px; z-index: 2000;
     border-radius: 20px;
   }
@@ -145,7 +156,55 @@
   .btn.secondary { background: var(--paper); color: var(--ink); border: 2.5px solid var(--ink); font-weight: 700; font-size: 15px; padding: 12px 0; }
   .fineprint { margin: 15px 0 0; text-align: center; font-size: 13px; font-weight: 500; color: var(--ink-soft); }
   .fineprint u { text-underline-offset: 3px; }
-  .hidden { display: none; }
+  .hidden { display: none !important; }
+
+  /* ---------- modal ---------- */
+  .modal-back {
+    position: fixed; inset: 0; z-index: 2500;
+    background: rgba(28, 20, 48, 0.45);
+    display: grid; place-items: center;
+  }
+  .modal {
+    width: min(440px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    border-radius: 20px;
+    padding: 22px 24px;
+  }
+  .modal h2 { margin: 0 0 4px; font: 800 19px/1.3 "Hanken Grotesk", sans-serif; }
+  .modal .sub { color: var(--ink-soft); font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+  .modal label { display: block; font-weight: 700; font-size: 13px; margin: 12px 0 5px; }
+  .modal input[type=text], .modal textarea, .modal select {
+    width: 100%; background: #FBF9FF;
+    border: 2px solid var(--ink); border-radius: 11px;
+    font: 600 14px "Hanken Grotesk", sans-serif;
+    color: var(--ink); padding: 9px 11px; outline: none;
+  }
+  .modal textarea { resize: vertical; min-height: 72px; }
+  .star-row { display: flex; gap: 6px; }
+  .star-row button {
+    flex: 1; font-size: 22px; padding: 6px 0;
+    background: #FBF9FF; border: 2px solid var(--ink);
+    border-radius: 11px; cursor: pointer; filter: grayscale(1) opacity(0.45);
+  }
+  .star-row button.on { filter: none; background: #EFE3FB; }
+  .tag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+  .tag-grid label { display: flex; align-items: center; gap: 7px; margin: 0; font-weight: 600; }
+  .modal .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .modal .actions .btn { margin: 0; padding: 11px 0; font-size: 15px; }
+  .modal .err { color: var(--red); font-weight: 700; font-size: 13px; margin-top: 10px; min-height: 1em; }
+
+  /* ---------- toast ---------- */
+  .toast {
+    position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
+    z-index: 4000;
+    background: var(--ink); color: var(--paper);
+    border: 2.5px solid var(--ink); border-radius: 999px;
+    box-shadow: var(--shadow-sm);
+    font-weight: 800; font-size: 14px;
+    padding: 11px 22px;
+    max-width: calc(100vw - 40px);
+  }
 
   /* ---------- leaflet restyle ---------- */
   .leaflet-control-zoom.leaflet-bar {
@@ -202,15 +261,8 @@
     box-shadow: 2.5px 2.5px 0 var(--ink);
   }
   .pop-actions .rate { background: var(--ink); color: var(--paper); }
-  .pop-actions .maps { background: var(--paper); color: var(--ink); }
-  .pop-actions button:active { transform: translate(2px,2px); box-shadow: 0.5px 0.5px 0 var(--ink); }
-  .pop-photo {
-    height: 74px; border: 2px dashed var(--gray); border-radius: 11px;
-    display: grid; place-items: center;
-    color: var(--gray); font-weight: 600; font-size: 12px;
-    margin-bottom: 10px;
-  }
   .pop-actions .reviews-btn { background: var(--paper); color: var(--ink); }
+  .pop-actions button:active { transform: translate(2px,2px); box-shadow: 0.5px 0.5px 0 var(--ink); }
 
   /* ---------- review drawer ---------- */
   .drawer {
@@ -246,6 +298,7 @@
     background: #FBF9FF;
     box-shadow: 3px 3px 0 var(--ink);
     padding: 12px 14px;
+    position: relative;
   }
   .review-card.top { background: #FBDCC0; }
   .top-chip {
@@ -272,6 +325,32 @@
   }
   .upvote:active { transform: translate(2px,2px); box-shadow: 0.5px 0.5px 0 var(--ink); }
   .upvote.voted { background: var(--green); color: #FBF9FF; }
+  .report {
+    position: absolute; top: 10px; right: 12px;
+    background: none; border: none; cursor: pointer;
+    color: var(--gray); font-size: 13px; padding: 2px;
+  }
+  .report:hover { color: var(--red); }
+
+  /* ---------- mobile ---------- */
+  @media (max-width: 640px) {
+    .topbar { gap: 8px; }
+    .logo-badge { width: 46px; height: 46px; font-size: 20px; }
+    .searchbar { padding: 0 12px; }
+    .searchbar input { font-size: 14px; }
+    .layers-btn { padding: 0 12px; font-size: 12px; }
+    .chips {
+      top: 76px; right: 0; padding-right: 16px;
+      flex-wrap: nowrap; overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip { white-space: nowrap; }
+    .legend { display: none; }
+    .drawer { top: auto; right: 8px; left: 8px; bottom: 8px; width: auto; height: 62vh;
+      transform: translateY(calc(100% + 20px)); }
+    .drawer.open { transform: translateY(0); }
+  }
 </style>
 </head>
 <body>
@@ -280,14 +359,15 @@
 
 <div class="topbar">
   <div class="logo-badge">W</div>
-  <div class="searchbar">🔍 <input placeholder="Search a spot, street, or neighborhood…"></div>
+  <div class="searchbar">🔍 <input id="search" placeholder="Search a spot…"></div>
   <div class="spacer"></div>
-  <button class="pill layers-btn" id="reviews-main">⭐&nbsp; REVIEWS</button>
-  <button class="pill layers-btn">🏷️&nbsp; FILTERS</button>
+  <button class="pill layers-btn" id="near-me">📍 NEAR ME</button>
+  <button class="pill layers-btn accent" id="add-spot">➕ ADD</button>
+  <button class="pill layers-btn" id="reviews-main">⭐ REVIEWS</button>
 </div>
 
 <div class="chips">
-  <span class="chip pill badge" id="clock">OPENWIPES · SF</span>
+  <span class="chip pill badge">OPENWIPES · SF</span>
   <button class="chip pill" data-tag="all" data-on="1">ALL</button>
   <button class="chip pill" data-tag="Free">FREE</button>
   <button class="chip pill" data-tag="Wheelchair accessible">ACCESSIBLE</button>
@@ -323,50 +403,92 @@
     <div class="row"><span class="swatch" style="background:var(--red)"></span> dicey</div>
   </div>
   <button class="btn primary" id="show-map">Show me the map</button>
-  <button class="btn secondary">How it works →</button>
+  <button class="btn secondary" id="how-it-works">How it works →</button>
   <p class="fineprint">Free, no account. Seeded from <u>SF's open data</u>, grown by everyone who's ever really had to go.</p>
+</div>
+
+<!-- rate modal -->
+<div class="modal-back hidden" id="rate-back">
+  <form class="modal card" id="rate-form">
+    <h2 id="rate-title">Rate it</h2>
+    <div class="sub">Stars required, everything else optional.</div>
+    <div class="star-row" id="rate-stars">
+      <button type="button" data-v="1">⭐</button><button type="button" data-v="2">⭐</button><button type="button" data-v="3">⭐</button><button type="button" data-v="4">⭐</button><button type="button" data-v="5">⭐</button>
+    </div>
+    <label for="rate-body">What should people know?</label>
+    <textarea id="rate-body" maxlength="600" placeholder="line length, cleanliness, codes, vibes…"></textarea>
+    <label for="rate-who">Display name</label>
+    <input type="text" id="rate-who" maxlength="40" placeholder="anonymous">
+    <div class="err" id="rate-err"></div>
+    <div class="actions">
+      <button type="submit" class="btn primary">Post review</button>
+      <button type="button" class="btn secondary" data-close>Cancel</button>
+    </div>
+  </form>
+</div>
+
+<!-- add modal -->
+<div class="modal-back hidden" id="add-back">
+  <form class="modal card" id="add-form">
+    <h2>Add a bathroom</h2>
+    <div class="sub" id="add-sub">Pinned to the spot you tapped.</div>
+    <label for="add-name">Name</label>
+    <input type="text" id="add-name" maxlength="80" placeholder="e.g. Ritual Coffee back hallway" required>
+    <label for="add-type">Type</label>
+    <select id="add-type">
+      <option>Public / city facility</option>
+      <option>Restaurant</option>
+      <option>Cafe / coffee shop</option>
+      <option>Bar</option>
+      <option>Retail / store</option>
+      <option>Hotel lobby</option>
+      <option>Gas station</option>
+      <option>Transit station</option>
+      <option>Other</option>
+    </select>
+    <label>Tags</label>
+    <div class="tag-grid">
+      <label><input type="checkbox" value="Free"> Free</label>
+      <label><input type="checkbox" value="Gender-neutral"> Gender-neutral</label>
+      <label><input type="checkbox" value="Wheelchair accessible"> Accessible</label>
+      <label><input type="checkbox" value="Requires purchase"> Requires purchase</label>
+      <label><input type="checkbox" value="Code required"> Code required</label>
+      <label><input type="checkbox" value="Baby changing"> Baby changing</label>
+    </div>
+    <div class="err" id="add-err"></div>
+    <div class="actions">
+      <button type="submit" class="btn primary">Add it</button>
+      <button type="button" class="btn secondary" data-close>Cancel</button>
+    </div>
+  </form>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="seed.js"></script>
 <script>
-const REVIEWS = {
+// ---------- demo fallback data (used only when the API is unreachable,
+// e.g. the self-contained artifact build) ----------
+const DEMO_REVIEWS = {
   "Dolores Park Restroom": [
-    { who: "MissionDweller94", stars: 5, text: "clean-ish for a park bathroom, line moves fast on weekdays. bring your own tp on Sundays lol", up: 14 },
-    { who: "anonymous", stars: 3, text: "door lock is busted on the left stall, everything else fine", up: 6 },
-    { who: "picnicgoblin", stars: 4, text: "survived a Saturday afternoon here. that's five stars in spirit", up: 9 },
+    { id: -1, who: "MissionDweller94", stars: 5, body: "clean-ish for a park bathroom, line moves fast on weekdays. bring your own tp on Sundays lol", up: 14 },
+    { id: -2, who: "anonymous", stars: 3, body: "door lock is busted on the left stall, everything else fine", up: 6 },
+    { id: -3, who: "picnicgoblin", stars: 4, body: "survived a Saturday afternoon here. that's five stars in spirit", up: 9 },
   ],
   "Ferry Building": [
-    { who: "commuterlyfe", stars: 5, text: "the marble of public restrooms. spotless at 8am, still decent at 5", up: 21 },
-    { who: "anonymous", stars: 4, text: "gets a tourist line at lunch but worth the wait", up: 5 },
-  ],
-  "SF Main Library": [
-    { who: "stacksandstalls", stars: 4, text: "3rd floor is the move, ground floor gets rough", up: 8 },
+    { id: -4, who: "commuterlyfe", stars: 5, body: "the marble of public restrooms. spotless at 8am, still decent at 5", up: 21 },
+    { id: -5, who: "anonymous", stars: 4, body: "gets a tourist line at lunch but worth the wait", up: 5 },
   ],
   "Salesforce Park": [
-    { who: "gardenlurker", stars: 5, text: "hidden gem on the bus deck level. gender-neutral, huge, always empty", up: 17 },
-    { who: "anonymous", stars: 4, text: "security guard will point you the right way if lost", up: 3 },
+    { id: -6, who: "gardenlurker", stars: 5, body: "hidden gem on the bus deck level. gender-neutral, huge, always empty", up: 17 },
   ],
   "Zeitgeist": [
-    { who: "patio_rat", stars: 2, text: "you know what you're getting into. buy a beer first", up: 11 },
+    { id: -7, who: "patio_rat", stars: 2, body: "you know what you're getting into. buy a beer first", up: 11 },
   ],
 };
-const SPOTS = [
-  { name: "Dolores Park Restroom", type: "Public / city facility", lat: 37.7598, lng: -122.4271, score: 4.1, reviews: 38, tags: ["Free", "Gender-neutral"] },
-  { name: "Ferry Building", type: "Public / city facility", lat: 37.7955, lng: -122.3937, score: 4.5, reviews: 61, tags: ["Free", "Wheelchair accessible", "Baby changing", "No code"] },
-  { name: "SF Main Library", type: "Public / city facility", lat: 37.7787, lng: -122.4157, score: 3.4, reviews: 22, tags: ["Free", "Wheelchair accessible", "No code"] },
-  { name: "Blue Bottle Mint Plaza", type: "Cafe / coffee shop", lat: 37.7827, lng: -122.4090, score: 3.8, reviews: 14, tags: ["Requires purchase", "Code required"] },
-  { name: "Westfield Level 4", type: "Retail / store", lat: 37.7841, lng: -122.4076, score: 2.2, reviews: 29, tags: ["Free", "Wheelchair accessible"] },
-  { name: "Alamo Square Restroom", type: "Public / city facility", lat: 37.7767, lng: -122.4345, score: 2.9, reviews: 12, tags: ["Free"] },
-  { name: "Zeitgeist", type: "Bar", lat: 37.7702, lng: -122.4223, score: 1.9, reviews: 17, tags: ["Requires purchase"] },
-  { name: "Salesforce Park", type: "Public / city facility", lat: 37.7897, lng: -122.3963, score: 4.6, reviews: 44, tags: ["Free", "Wheelchair accessible", "Gender-neutral", "Baby changing", "No code"] },
-  { name: "Crissy Field East Beach", type: "Public / city facility", lat: 37.8039, lng: -122.4519, score: 3.1, reviews: 9, tags: ["Free", "No code"] },
-  { name: "Pit Stop — 16th & Mission", type: "Public / city facility", lat: 37.7648, lng: -122.4194, score: 2.4, reviews: 26, tags: ["Free", "No code"] },
-];
 
+// ---------- map ----------
 const map = L.map("map", { zoomControl: true }).setView([37.7793, -122.4193], 13);
 map.zoomControl.setPosition("bottomright");
-
 L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   maxZoom: 19,
@@ -374,134 +496,284 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r
 
 const band = s => (s == null ? "" : s >= 4 ? "good" : s >= 2.5 ? "mid" : "bad");
 const stars = s => "★".repeat(Math.round(s)) + "☆".repeat(5 - Math.round(s));
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const ALL_SPOTS = SPOTS.concat(
-  (typeof SEED_SPOTS === "undefined" ? [] : SEED_SPOTS)
-    .filter(s => !SPOTS.some(c => c.name === s.name))
-    .map(s => ({ score: null, reviews: 0, tags: [], ...s }))
-);
+let DEMO = false;
+let spots = [];
+const markers = new Map();
+let activeTag = "all";
 
-const markers = [];
-for (const spot of ALL_SPOTS) {
-  const icon = L.divIcon({
-    className: "",
-    html: `<div class="ow-pin ${band(spot.score)}">🚽</div>`,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-    popupAnchor: [0, -22],
-  });
-  const m = L.marker([spot.lat, spot.lng], { icon }).addTo(map);
-  m.bindPopup(`
-    <div class="pop-name">${spot.name}</div>
-    <div class="pop-type">${spot.type}${spot.address ? " · " + spot.address : ""}${spot.hours ? "<br>🕐 " + spot.hours : ""}</div>
-    ${spot.score == null
-      ? `<div class="pop-score">No ratings yet · be the first</div>`
-      : `<div class="pop-score"><span class="stars">${stars(spot.score)}</span> ${spot.score.toFixed(1)} · ${spot.reviews} reviews</div>`}
-    <div class="pop-tags">${spot.tags.map(t => `<span>${t}</span>`).join("")}</div>
-    <div class="pop-photo">📷 add the first photo</div>
-    <div class="pop-actions">
-      <button class="rate">Rate it</button>
-      <button class="reviews-btn" data-spot="${spot.name}">Read reviews</button>
-    </div>
-  `, { minWidth: 230 });
-  m._ow = spot;
-  markers.push(m);
+function toast(msg, ms = 2600) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const el = document.createElement("div");
+  el.className = "toast"; el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), ms);
 }
 
-// tag chip filtering
+async function api(path, opts) {
+  const res = await fetch(path, opts && {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+async function loadSpots() {
+  try {
+    spots = await api("/api/spots");
+  } catch {
+    DEMO = true;
+    const seed = (typeof SEED_SPOTS === "undefined" ? [] : SEED_SPOTS);
+    const scores = { "Dolores Park Restroom": [4.1, 38], "Ferry Building": [4.5, 61], "Salesforce Park": [4.6, 44], "Zeitgeist": [1.9, 17] };
+    spots = seed.map((s, i) => ({
+      id: -(i + 1), tags: [], ...s,
+      score: scores[s.name]?.[0] ?? null,
+      reviews: scores[s.name]?.[1] ?? 0,
+    }));
+    toast("Demo mode: showing sample data, submissions are off");
+  }
+  renderMarkers();
+}
+
+function popupHtml(spot) {
+  return `
+    <div class="pop-name">${esc(spot.name)}</div>
+    <div class="pop-type">${esc(spot.type)}${spot.address ? " · " + esc(spot.address) : ""}${spot.hours ? "<br>🕐 " + esc(spot.hours) : ""}</div>
+    ${spot.score == null
+      ? `<div class="pop-score">No ratings yet · be the first</div>`
+      : `<div class="pop-score"><span class="stars">${stars(spot.score)}</span> ${spot.score.toFixed(1)} · ${spot.reviews} review${spot.reviews === 1 ? "" : "s"}</div>`}
+    <div class="pop-tags">${(spot.tags || []).map(t => `<span>${esc(t)}</span>`).join("")}</div>
+    <div class="pop-actions">
+      <button class="rate" data-rate="${spot.id}">Rate it</button>
+      <button class="reviews-btn" data-spot="${spot.id}">Read reviews</button>
+    </div>`;
+}
+
+function renderMarkers() {
+  for (const m of markers.values()) m.remove();
+  markers.clear();
+  for (const spot of spots) {
+    if (activeTag !== "all" && !(spot.tags || []).includes(activeTag)) continue;
+    const icon = L.divIcon({
+      className: "",
+      html: `<div class="ow-pin ${band(spot.score)}">🚽</div>`,
+      iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -22],
+    });
+    const m = L.marker([spot.lat, spot.lng], { icon }).addTo(map);
+    m.bindPopup(popupHtml(spot), { minWidth: 230 });
+    markers.set(spot.id, m);
+  }
+}
+
+// ---------- chips ----------
 document.querySelectorAll(".chip[data-tag]").forEach(chip => {
   chip.addEventListener("click", () => {
     document.querySelectorAll(".chip[data-tag]").forEach(c => c.dataset.on = "0");
     chip.dataset.on = "1";
-    const tag = chip.dataset.tag;
-    for (const m of markers) {
-      const show = tag === "all" || m._ow.tags.includes(tag);
-      if (show && !map.hasLayer(m)) m.addTo(map);
-      if (!show && map.hasLayer(m)) m.remove();
-    }
+    activeTag = chip.dataset.tag;
+    renderMarkers();
   });
 });
 
-document.getElementById("show-map").addEventListener("click", () => {
-  document.getElementById("welcome").classList.add("hidden");
+// ---------- search ----------
+document.getElementById("search").addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) return;
+  const hit = spots.find(s => s.name.toLowerCase().includes(q)) ||
+              spots.find(s => (s.address || "").toLowerCase().includes(q));
+  if (!hit) return toast("No spot matches that. Try another name.");
+  map.setView([hit.lat, hit.lng], 16);
+  markers.get(hit.id)?.openPopup();
 });
+
+// ---------- near me ----------
+document.getElementById("near-me").addEventListener("click", () => {
+  if (!navigator.geolocation) return toast("Location isn't available in this browser.");
+  navigator.geolocation.getCurrentPosition(
+    p => map.setView([p.coords.latitude, p.coords.longitude], 16),
+    () => toast("Couldn't get your location.")
+  );
+});
+
+// ---------- welcome ----------
+document.getElementById("show-map").addEventListener("click", () =>
+  document.getElementById("welcome").classList.add("hidden"));
+document.getElementById("how-it-works").addEventListener("click", () => {
+  document.getElementById("welcome").classList.add("hidden");
+  toast("Tap a pin to read or rate. ➕ ADD puts a new bathroom on the map.", 4200);
+});
+
+// ---------- rate modal ----------
+let rateSpotId = null, rateStars = 0;
+const rateBack = document.getElementById("rate-back");
+document.getElementById("rate-stars").addEventListener("click", e => {
+  const b = e.target.closest("button[data-v]");
+  if (!b) return;
+  rateStars = Number(b.dataset.v);
+  document.querySelectorAll("#rate-stars button").forEach(x =>
+    x.classList.toggle("on", Number(x.dataset.v) <= rateStars));
+});
+function openRate(spotId) {
+  if (DEMO) return toast("Demo mode: submissions are off here. Visit openwipes.vercel.app!");
+  rateSpotId = spotId; rateStars = 0;
+  document.querySelectorAll("#rate-stars button").forEach(x => x.classList.remove("on"));
+  document.getElementById("rate-form").reset();
+  document.getElementById("rate-err").textContent = "";
+  const spot = spots.find(s => s.id === spotId);
+  document.getElementById("rate-title").textContent = "Rate " + (spot?.name || "it");
+  rateBack.classList.remove("hidden");
+  map.closePopup();
+}
+document.getElementById("rate-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const err = document.getElementById("rate-err");
+  if (!rateStars) { err.textContent = "Pick a star rating first."; return; }
+  try {
+    await api("/api/reviews", {
+      spot_id: rateSpotId, stars: rateStars,
+      body: document.getElementById("rate-body").value,
+      who: document.getElementById("rate-who").value,
+    });
+    rateBack.classList.add("hidden");
+    toast("Review posted. Thank you for your service. 🫡");
+    await loadSpots();
+    openDrawer(rateSpotId);
+  } catch (ex) { err.textContent = ex.message; }
+});
+
+// ---------- add flow ----------
+let adding = false, addLatLng = null;
+const addBack = document.getElementById("add-back");
+document.getElementById("add-spot").addEventListener("click", () => {
+  if (DEMO) return toast("Demo mode: submissions are off here. Visit openwipes.vercel.app!");
+  adding = !adding;
+  document.body.classList.toggle("adding", adding);
+  if (adding) toast("Tap the map where the bathroom is.", 4000);
+});
+map.on("click", e => {
+  if (!adding) return;
+  adding = false;
+  document.body.classList.remove("adding");
+  addLatLng = e.latlng;
+  document.getElementById("add-form").reset();
+  document.getElementById("add-err").textContent = "";
+  document.getElementById("add-sub").textContent =
+    `Pinned at ${addLatLng.lat.toFixed(4)}, ${addLatLng.lng.toFixed(4)}.`;
+  addBack.classList.remove("hidden");
+});
+document.getElementById("add-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const err = document.getElementById("add-err");
+  try {
+    const tags = [...document.querySelectorAll("#add-form .tag-grid input:checked")].map(c => c.value);
+    await api("/api/spots", {
+      name: document.getElementById("add-name").value,
+      type: document.getElementById("add-type").value,
+      lat: addLatLng.lat, lng: addLatLng.lng, tags,
+    });
+    addBack.classList.add("hidden");
+    toast("On the map. The city thanks you. 🚽");
+    await loadSpots();
+  } catch (ex) { err.textContent = ex.message; }
+});
+
+document.querySelectorAll("[data-close]").forEach(b =>
+  b.addEventListener("click", () => b.closest(".modal-back").classList.add("hidden")));
 
 // ---------- review drawer ----------
 const drawer = document.getElementById("drawer");
 const drawerList = document.getElementById("drawer-list");
-let drawerSpot = null; // null = all of SF
-const voted = new Set();
+let drawerSpotId = null; // null = all of SF
 
-function currentReviews() {
-  if (drawerSpot) return (REVIEWS[drawerSpot] || []).map(r => ({ spot: drawerSpot, r }));
-  return Object.entries(REVIEWS).flatMap(([spot, list]) => list.map(r => ({ spot, r })));
+async function fetchReviews(spotId) {
+  if (DEMO) {
+    const list = spotId == null
+      ? Object.entries(DEMO_REVIEWS).flatMap(([spot, rs]) => rs.map(r => ({ ...r, spot })))
+      : (DEMO_REVIEWS[spots.find(s => s.id === spotId)?.name] || []).map(r => ({ ...r, spot: "" }));
+    return list.sort((a, b) => b.up - a.up).map(r => ({ ...r, spot_id: spotId, voted: false }));
+  }
+  return api(spotId == null ? "/api/reviews" : `/api/reviews?spot_id=${spotId}`);
 }
 
-function renderDrawer() {
-  const items = currentReviews().sort((a, b) => b.r.up - a.r.up);
+function renderDrawer(items) {
   if (!items.length) {
-    drawerList.innerHTML = `<div class="review-card">No reviews yet. Be the first to rate it.</div>`;
+    drawerList.innerHTML = `<div class="review-card">No reviews yet. Be the first to rate one.</div>`;
     return;
   }
-  drawerList.innerHTML = items.map(({ spot, r }, i) => `
+  drawerList.innerHTML = items.map((r, i) => `
     <div class="review-card ${i === 0 ? "top" : ""}">
       ${i === 0 ? `<span class="top-chip">👑 KING OF WIPES</span>` : ""}
+      <button class="report" data-report="${r.id}" title="Report this review">⚑</button>
       <div class="review-head">
-        <span class="who">${r.who}</span>
+        <span class="who">${esc(r.who)}</span>
         <span class="stars">${"★".repeat(r.stars)}${"☆".repeat(5 - r.stars)}</span>
       </div>
-      ${drawerSpot ? "" : `<div class="review-where" data-spot="${spot}">📍 ${spot}</div>`}
-      <div class="review-body">${r.text}</div>
-      <button class="upvote ${voted.has(spot + "|" + r.who) ? "voted" : ""}" data-spot="${spot}" data-who="${r.who}">▲ ${r.up}</button>
+      ${drawerSpotId == null && r.spot ? `<div class="review-where" data-goto="${r.spot_id}">📍 ${esc(r.spot)}</div>` : ""}
+      ${r.body ? `<div class="review-body">${esc(r.body)}</div>` : `<div class="review-body"></div>`}
+      <button class="upvote ${r.voted ? "voted" : ""}" data-up="${r.id}">▲ ${r.up}</button>
     </div>
   `).join("");
 }
 
-function openDrawer(spotName) {
-  drawerSpot = spotName;
-  if (spotName) {
-    const spot = ALL_SPOTS.find(s => s.name === spotName);
-    document.getElementById("drawer-title").textContent = spotName;
-    document.getElementById("drawer-sub").textContent = spot.score == null
-      ? "No ratings yet"
-      : `${stars(spot.score)} ${spot.score.toFixed(1)} · ${(REVIEWS[spotName] || []).length} reviews`;
-  } else {
-    document.getElementById("drawer-title").textContent = "Reviews — all of SF";
-    document.getElementById("drawer-sub").textContent =
-      `${currentReviews().length} reviews · sorted by upvotes`;
-  }
-  renderDrawer();
+async function openDrawer(spotId) {
+  drawerSpotId = spotId;
+  const spot = spotId == null ? null : spots.find(s => s.id === spotId);
+  document.getElementById("drawer-title").textContent = spot ? spot.name : "Reviews, all of SF";
+  document.getElementById("drawer-sub").textContent = "loading…";
   drawer.classList.add("open");
   drawer.setAttribute("aria-hidden", "false");
   map.closePopup();
+  const items = await fetchReviews(spotId).catch(() => []);
+  document.getElementById("drawer-sub").textContent = spot
+    ? (spot.score == null ? "No ratings yet" : `${stars(spot.score)} ${spot.score.toFixed(1)} · ${items.length} reviews`)
+    : `${items.length} reviews · sorted by upvotes`;
+  renderDrawer(items);
 }
 
 document.getElementById("reviews-main").addEventListener("click", () => openDrawer(null));
-
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest(".reviews-btn");
-  if (btn) { openDrawer(btn.dataset.spot); return; }
-  const where = e.target.closest(".review-where");
-  if (where) {
-    const spot = ALL_SPOTS.find(s => s.name === where.dataset.spot);
-    if (spot) { map.setView([spot.lat, spot.lng], 15); openDrawer(spot.name); }
-    return;
-  }
-  const up = e.target.closest(".upvote");
-  if (up) {
-    const key = up.dataset.spot + "|" + up.dataset.who;
-    const review = (REVIEWS[up.dataset.spot] || []).find(r => r.who === up.dataset.who);
-    if (!review) return;
-    if (voted.has(key)) { voted.delete(key); review.up -= 1; }
-    else { voted.add(key); review.up += 1; }
-    renderDrawer();
-  }
-});
-
 document.getElementById("drawer-close").addEventListener("click", () => {
   drawer.classList.remove("open");
   drawer.setAttribute("aria-hidden", "true");
 });
+
+document.addEventListener("click", async e => {
+  const rate = e.target.closest("[data-rate]");
+  if (rate) return openRate(Number(rate.dataset.rate));
+  const rd = e.target.closest("[data-spot]");
+  if (rd) return openDrawer(Number(rd.dataset.spot));
+  const go = e.target.closest("[data-goto]");
+  if (go) {
+    const spot = spots.find(s => s.id === Number(go.dataset.goto));
+    if (spot) { map.setView([spot.lat, spot.lng], 16); openDrawer(spot.id); }
+    return;
+  }
+  const up = e.target.closest("[data-up]");
+  if (up) {
+    if (DEMO) return toast("Demo mode: voting is off here.");
+    try {
+      const r = await api("/api/upvote", { review_id: Number(up.dataset.up) });
+      up.textContent = `▲ ${r.up}`;
+      up.classList.toggle("voted", r.voted);
+    } catch (ex) { toast(ex.message); }
+    return;
+  }
+  const rep = e.target.closest("[data-report]");
+  if (rep) {
+    if (DEMO) return toast("Demo mode: reporting is off here.");
+    try {
+      await api("/api/report", { review_id: Number(rep.dataset.report) });
+      toast("Reported. Reviews with three reports are hidden.");
+    } catch (ex) { toast(ex.message); }
+  }
+});
+
+loadSpots();
 </script>
+<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
