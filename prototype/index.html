@@ -300,6 +300,7 @@
   <div class="row"><span class="swatch" style="background:var(--green)"></span> Sparkling <small>· 4★ and up</small></div>
   <div class="row"><span class="swatch" style="background:var(--amber)"></span> Decent <small>· 2.5 to 4★</small></div>
   <div class="row"><span class="swatch" style="background:var(--red)"></span> Dicey <small>· under 2.5★</small></div>
+  <div class="row"><span class="swatch" style="background:var(--gray)"></span> Unrated <small>· no reviews yet</small></div>
 </div>
 
 <div class="drawer card" id="drawer" aria-hidden="true">
@@ -327,6 +328,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="seed.js"></script>
 <script>
 const REVIEWS = {
   "Dolores Park Restroom": [
@@ -370,11 +372,17 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r
   maxZoom: 19,
 }).addTo(map);
 
-const band = s => (s >= 4 ? "good" : s >= 2.5 ? "mid" : "bad");
+const band = s => (s == null ? "" : s >= 4 ? "good" : s >= 2.5 ? "mid" : "bad");
 const stars = s => "★".repeat(Math.round(s)) + "☆".repeat(5 - Math.round(s));
 
+const ALL_SPOTS = SPOTS.concat(
+  (typeof SEED_SPOTS === "undefined" ? [] : SEED_SPOTS)
+    .filter(s => !SPOTS.some(c => c.name === s.name))
+    .map(s => ({ score: null, reviews: 0, tags: [], ...s }))
+);
+
 const markers = [];
-for (const spot of SPOTS) {
+for (const spot of ALL_SPOTS) {
   const icon = L.divIcon({
     className: "",
     html: `<div class="ow-pin ${band(spot.score)}">🚽</div>`,
@@ -385,8 +393,10 @@ for (const spot of SPOTS) {
   const m = L.marker([spot.lat, spot.lng], { icon }).addTo(map);
   m.bindPopup(`
     <div class="pop-name">${spot.name}</div>
-    <div class="pop-type">${spot.type}</div>
-    <div class="pop-score"><span class="stars">${stars(spot.score)}</span> ${spot.score.toFixed(1)} · ${spot.reviews} reviews</div>
+    <div class="pop-type">${spot.type}${spot.address ? " · " + spot.address : ""}${spot.hours ? "<br>🕐 " + spot.hours : ""}</div>
+    ${spot.score == null
+      ? `<div class="pop-score">No ratings yet · be the first</div>`
+      : `<div class="pop-score"><span class="stars">${stars(spot.score)}</span> ${spot.score.toFixed(1)} · ${spot.reviews} reviews</div>`}
     <div class="pop-tags">${spot.tags.map(t => `<span>${t}</span>`).join("")}</div>
     <div class="pop-photo">📷 add the first photo</div>
     <div class="pop-actions">
@@ -450,10 +460,11 @@ function renderDrawer() {
 function openDrawer(spotName) {
   drawerSpot = spotName;
   if (spotName) {
-    const spot = SPOTS.find(s => s.name === spotName);
+    const spot = ALL_SPOTS.find(s => s.name === spotName);
     document.getElementById("drawer-title").textContent = spotName;
-    document.getElementById("drawer-sub").textContent =
-      `${stars(spot.score)} ${spot.score.toFixed(1)} · ${(REVIEWS[spotName] || []).length} reviews`;
+    document.getElementById("drawer-sub").textContent = spot.score == null
+      ? "No ratings yet"
+      : `${stars(spot.score)} ${spot.score.toFixed(1)} · ${(REVIEWS[spotName] || []).length} reviews`;
   } else {
     document.getElementById("drawer-title").textContent = "Reviews — all of SF";
     document.getElementById("drawer-sub").textContent =
@@ -472,7 +483,7 @@ document.addEventListener("click", (e) => {
   if (btn) { openDrawer(btn.dataset.spot); return; }
   const where = e.target.closest(".review-where");
   if (where) {
-    const spot = SPOTS.find(s => s.name === where.dataset.spot);
+    const spot = ALL_SPOTS.find(s => s.name === where.dataset.spot);
     if (spot) { map.setView([spot.lat, spot.lng], 15); openDrawer(spot.name); }
     return;
   }
