@@ -1,6 +1,6 @@
-# Stall Scout SF · Product Requirements
+# OpenWipes · Product Requirements
 
-Working title: **Stall Scout SF** (open question Q1 below if you want a different name).
+Name: **OpenWipes**.
 
 One-liner: a free, no-account map of every public-usable bathroom in San Francisco, seeded from SF open data and grown by community ratings, reviews, and submissions.
 
@@ -97,21 +97,22 @@ Theme is the curb.guide look, adapted:
 - Type: Archivo (500 to 900 weights) everywhere, Archivo Black for the logo badge.
 - Accent semantics: green/amber/red are score bands only; red logo badge is the one brand accent.
 - Pins: rounded-square toilet-glyph markers colored by score band.
-- Mockup lives at the Stall Scout SF artifact (already reviewed).
+- Mockup lives at the OpenWipes artifact (already reviewed under the earlier working title); logo badge glyph and wordmark update to the new name.
 
-## Success measures (fill in Q6)
+## Success measures
 
-- TBD by owner.
+- Weekly unique visitors.
+- New bathrooms added per week.
+- Reviews posted per week.
 
 ---
 
 ## Q&A
 
-Pre-filled answers record decisions already made.
-Open questions are marked **OPEN** for you to fill in.
+All questions are answered; this section records the decisions.
 
 **Q1. App name?**
-A: Working title "Stall Scout SF". **OPEN** if you want something else; the logo badge currently shows an "S".
+A: OpenWipes.
 
 **Q2. Real app or prototype?**
 A: Real deployed app with live persistent data, on Vercel.
@@ -126,22 +127,22 @@ A: None. Fully anonymous, optional free-text display name on reviews.
 A: Yes, DataSF public restroom dataset imported at launch.
 
 **Q6. Success metrics?**
-A: **OPEN**. Suggested: weekly unique visitors, community submissions per week, reviews per week.
+A: Weekly unique visitors, community submissions per week, reviews posted per week.
 
 **Q7. Moderation?**
 A: IP-hash rate limiting only for v1. Flagging and admin tooling deferred until abuse appears.
 
 **Q8. Domain / hosting account?**
-A: **OPEN**. Vercel project name and custom domain (if any). Remember the commit-author gate: commit as topdogmatthew@gmail.com.
+A: Launch on the free Vercel URL (openwipes.vercel.app or nearest available); buy a custom domain only if it gets traction. Remember the commit-author gate: commit as topdogmatthew@gmail.com.
 
 **Q9. Rating required, review text optional?**
 A: Yes. Stars are mandatory, everything else optional.
 
 **Q10. Photo rules?**
-A: One photo per submission, 5 MB cap, client-side resize. **OPEN**: allow photos on seed rows before any review exists?
+A: One photo per submission, 5 MB cap, client-side resize. Photos may attach directly to a bathroom, so seed rows can get photos before any review exists.
 
 **Q11. Bathroom types list final?**
-A: Draft list in "Bathroom types" above. **OPEN**: add or cut types.
+A: Final as drafted in "Bathroom types" above.
 
 **Q12. Launch scope?**
 A: San Francisco only, enforced by bounding box. Expansion is a later conversation.
