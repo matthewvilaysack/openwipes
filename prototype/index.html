@@ -258,6 +258,11 @@
   .review-head .who { font-weight: 800; font-size: 14px; }
   .review-head .stars { color: var(--ink); letter-spacing: 1px; font-size: 13px; }
   .review-body { margin: 6px 0 10px; font-size: 13.5px; line-height: 1.45; }
+  .review-where {
+    margin-top: 4px; font-size: 12px; font-weight: 700;
+    color: var(--ink-soft); cursor: pointer;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
   .upvote {
     display: inline-flex; align-items: center; gap: 6px;
     background: var(--paper); border: 2px solid var(--ink);
@@ -277,6 +282,7 @@
   <div class="logo-badge">W</div>
   <div class="searchbar">🔍 <input placeholder="Search a spot, street, or neighborhood…"></div>
   <div class="spacer"></div>
+  <button class="pill layers-btn" id="reviews-main">⭐&nbsp; REVIEWS</button>
   <button class="pill layers-btn">🏷️&nbsp; FILTERS</button>
 </div>
 
@@ -413,46 +419,67 @@ document.getElementById("show-map").addEventListener("click", () => {
 // ---------- review drawer ----------
 const drawer = document.getElementById("drawer");
 const drawerList = document.getElementById("drawer-list");
-let drawerSpot = null;
+let drawerSpot = null; // null = all of SF
 const voted = new Set();
 
+function currentReviews() {
+  if (drawerSpot) return (REVIEWS[drawerSpot] || []).map(r => ({ spot: drawerSpot, r }));
+  return Object.entries(REVIEWS).flatMap(([spot, list]) => list.map(r => ({ spot, r })));
+}
+
 function renderDrawer() {
-  const reviews = (REVIEWS[drawerSpot] || []).slice().sort((a, b) => b.up - a.up);
-  if (!reviews.length) {
+  const items = currentReviews().sort((a, b) => b.r.up - a.r.up);
+  if (!items.length) {
     drawerList.innerHTML = `<div class="review-card">No reviews yet. Be the first to rate it.</div>`;
     return;
   }
-  drawerList.innerHTML = reviews.map((r, i) => `
+  drawerList.innerHTML = items.map(({ spot, r }, i) => `
     <div class="review-card ${i === 0 ? "top" : ""}">
       ${i === 0 ? `<span class="top-chip">👑 KING OF WIPES</span>` : ""}
       <div class="review-head">
         <span class="who">${r.who}</span>
         <span class="stars">${"★".repeat(r.stars)}${"☆".repeat(5 - r.stars)}</span>
       </div>
+      ${drawerSpot ? "" : `<div class="review-where" data-spot="${spot}">📍 ${spot}</div>`}
       <div class="review-body">${r.text}</div>
-      <button class="upvote ${voted.has(drawerSpot + "|" + r.who) ? "voted" : ""}" data-who="${r.who}">▲ ${r.up}</button>
+      <button class="upvote ${voted.has(spot + "|" + r.who) ? "voted" : ""}" data-spot="${spot}" data-who="${r.who}">▲ ${r.up}</button>
     </div>
   `).join("");
 }
 
+function openDrawer(spotName) {
+  drawerSpot = spotName;
+  if (spotName) {
+    const spot = SPOTS.find(s => s.name === spotName);
+    document.getElementById("drawer-title").textContent = spotName;
+    document.getElementById("drawer-sub").textContent =
+      `${stars(spot.score)} ${spot.score.toFixed(1)} · ${(REVIEWS[spotName] || []).length} reviews`;
+  } else {
+    document.getElementById("drawer-title").textContent = "Reviews — all of SF";
+    document.getElementById("drawer-sub").textContent =
+      `${currentReviews().length} reviews · sorted by upvotes`;
+  }
+  renderDrawer();
+  drawer.classList.add("open");
+  drawer.setAttribute("aria-hidden", "false");
+  map.closePopup();
+}
+
+document.getElementById("reviews-main").addEventListener("click", () => openDrawer(null));
+
 document.addEventListener("click", (e) => {
   const btn = e.target.closest(".reviews-btn");
-  if (btn) {
-    drawerSpot = btn.dataset.spot;
-    const spot = SPOTS.find(s => s.name === drawerSpot);
-    document.getElementById("drawer-title").textContent = drawerSpot;
-    document.getElementById("drawer-sub").textContent =
-      `${stars(spot.score)} ${spot.score.toFixed(1)} · ${(REVIEWS[drawerSpot] || []).length} reviews`;
-    renderDrawer();
-    drawer.classList.add("open");
-    drawer.setAttribute("aria-hidden", "false");
-    map.closePopup();
+  if (btn) { openDrawer(btn.dataset.spot); return; }
+  const where = e.target.closest(".review-where");
+  if (where) {
+    const spot = SPOTS.find(s => s.name === where.dataset.spot);
+    if (spot) { map.setView([spot.lat, spot.lng], 15); openDrawer(spot.name); }
     return;
   }
   const up = e.target.closest(".upvote");
-  if (up && drawerSpot) {
-    const key = drawerSpot + "|" + up.dataset.who;
-    const review = (REVIEWS[drawerSpot] || []).find(r => r.who === up.dataset.who);
+  if (up) {
+    const key = up.dataset.spot + "|" + up.dataset.who;
+    const review = (REVIEWS[up.dataset.spot] || []).find(r => r.who === up.dataset.who);
     if (!review) return;
     if (voted.has(key)) { voted.delete(key); review.up -= 1; }
     else { voted.add(key); review.up += 1; }
